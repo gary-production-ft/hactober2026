@@ -2,7 +2,7 @@
 
 > **"You are not playing the game. The game is learning how you play."**
 
-ECHO is an experimental browser game where **Gemma 2** (Google's open-weights AI model) acts as the living brain of the game world. It observes your behavior in real-time, builds a psychological profile on you, and physically changes the environment to counter your strategies.
+ECHO is an experimental browser game where **Gemma 4** (`gemma-4-26b-a4b-it`, Google's open-weights AI model) acts as the living brain of the game world. It observes your behavior in real-time, builds a psychological profile on you, and physically changes the environment to counter your strategies.
 
 Built for the **Hacktoberfest 2026 — "Gemma as the Brain of a Game"** challenge.
 
@@ -14,7 +14,7 @@ Built for the **Hacktoberfest 2026 — "Gemma as the Brain of a Game"** challeng
 
 Most games have static rules. ECHO has none.
 
-Instead, **Gemma 2** watches everything you do:
+Instead, **Gemma 4** watches everything you do:
 
 - Do you always take the same route? Gemma locks it.
 - Do you fight every enemy? Gemma spawns more.
@@ -98,7 +98,7 @@ flowchart LR
     
     D --> E{{"Aggression: 72%\nRoute Repetition: 4x\nRisk: 68%"}}
     
-    E --> F[Send to Gemma 2\ngoogle/gemma-2-9b-it]
+    E --> F[Send to Gemma 4\ngemma-4-26b-a4b-it]
     
     F --> G{API\nResponse}
     
@@ -140,7 +140,7 @@ graph TB
 
     subgraph AI ["AI Layer (GemmaProvider.ts)"]
         C1[buildPrompt\nPlayer Profile → JSON]
-        C2[API Call\ngemma-2-9b-it]
+        C2[API Call\ngemma-4-26b-a4b-it]
         C3[parseResponse\nJSON Extraction]
         C4[mockDecision\nOffline Fallback]
     end
@@ -296,5 +296,5 @@ echo/
 | **Idea & Originality** | AI acts as an adversarial game director, not a game character |
 | **Technical Depth** | Non-blocking async engine, Decision Guard, schema validation, fallback system |
 | **Working Demo** | Fully playable 3-level game deployed on Vercel |
-| **Meaningful use of Gemma 4** | `gemma-2-9b-it` directly observes player behavior and mutates the world |
+| **Meaningful use of Gemma 4** | `gemma-4-26b-a4b-it` directly observes player behavior and mutates the world |
 | **Documentation** | This README + ARCHITECTURE.md + HOW_TO_PLAY.md |

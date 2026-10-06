@@ -69,7 +69,7 @@ flowchart TD
     subgraph GEMMA ["GEMMA AI ANALYSIS"]
         direction LR
         AI1[Package behavior data\nJSON player profile]
-        AI1 --> AI2[Send to\ngemma-2-9b-it API]
+        AI1 --> AI2[Send to\ngemma-4-26b-a4b-it API]
         AI2 --> AI3{Response\nvalid?}
         AI3 -->|Yes| AI4[Decision Guard\nValidates schema]
         AI3 -->|Timeout / Error| AI5[🛡️ Fallback\nSPAWN_REWARD]
@@ -107,7 +107,7 @@ flowchart LR
     end
 
     subgraph API ["GEMMA API"]
-        A1[POST /v1beta/models\ngemma-2-9b-it:generateContent]
+        A1[POST /v1beta/models\ngemma-4-26b-a4b-it:generateContent]
         A2{Response\n< 5000ms?}
         A3[Extract JSON\nfrom response text]
         A1 --> A2
@@ -186,7 +186,7 @@ graph TB
     end
 
     subgraph External ["☁️ External Services"]
-        EXT1["Google Generative Language API\ngoogle/gemma-2-9b-it"]
+        EXT1["Google Generative Language API\ngemma-4-26b-a4b-it"]
     end
 
     UI2 -->|"KeyDown event"| ENG1

@@ -2,7 +2,7 @@
 
 Welcome to ECHO. You are trapped in a mysterious facility. The goal is simple: survive and find the exit through 3 increasingly difficult levels.
 
-But there is a catch. **Gemma 2**, a highly intelligent AI, is watching your every move and will actively change the environment to kill you based on your habits.
+But there is a catch. **Gemma 4**, a highly intelligent AI, is watching your every move and will actively change the environment to kill you based on your habits.
 
 ## 🎮 Controls
 

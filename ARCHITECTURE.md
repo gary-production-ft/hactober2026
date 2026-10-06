@@ -19,9 +19,9 @@ Most LLM integrations freeze the application while waiting for inference. ECHO s
 4. **Background Processing:** The game continues normally. An `[AI IS ANALYZING]` overlay appears to build tension, but the player is never prevented from moving.
 5. **Injection:** When Gemma responds (e.g., 800ms to 2000ms later), the payload is parsed and injected directly into the live `GameState`.
 
-## 3. Gemma 2 as a Game Director
+## 3. Gemma 4 as a Game Director
 
-We specifically target the `gemma-2-9b-it` model via the Google Generative Language API.
+We specifically target the `gemma-4-26b-a4b-it` model via the Google Generative Language API.
 
 Instead of chat, Gemma is provided with a **JSON stringified Player Profile** containing:
 - `Aggression`: Scales up when the player attacks frequently.
