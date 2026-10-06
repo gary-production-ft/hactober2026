@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { gameEngine } from './game/engine';
 import type { GameState } from './game/types';
 import { Heart, Crosshair, Skull, DoorOpen, Key, AlertOctagon, LogOut, ShieldAlert, Map } from 'lucide-react';
+import Waves from './Waves';
 import './App.css';
 
 function App() {
@@ -46,7 +47,21 @@ function App() {
   if (state.gameStatus === 'START') {
     return (
       <div className="entrance-screen" ref={containerRef}>
-        <div className="bg-grid" style={inverseParallax}></div>
+        {/* WAVES BACKGROUND — fills behind everything */}
+        <Waves
+          lineColor="rgba(0, 240, 255, 0.08)"
+          backgroundColor="transparent"
+          waveSpeedX={0.015}
+          waveSpeedY={0.008}
+          waveAmpX={40}
+          waveAmpY={20}
+          friction={0.92}
+          tension={0.008}
+          maxCursorMove={120}
+          xGap={14}
+          yGap={40}
+          style={{ zIndex: 0 }}
+        />
         <div className="system-info sys-top-left" style={parallaxStyle}>WORLD STATUS: STABLE<br/>PLAYER: NOT DETECTED</div>
         <div className="system-info sys-top-right" style={parallaxStyle}>AI CORE: READY</div>
 
@@ -148,6 +163,21 @@ function App() {
 
   return (
     <div className="app-container" ref={containerRef}>
+      {/* WAVES BACKGROUND — fills behind everything on game page */}
+      <Waves
+        lineColor="rgba(0, 240, 255, 0.05)"
+        backgroundColor="transparent"
+        waveSpeedX={0.01}
+        waveSpeedY={0.005}
+        waveAmpX={30}
+        waveAmpY={15}
+        friction={0.93}
+        tension={0.006}
+        maxCursorMove={80}
+        xGap={16}
+        yGap={44}
+        style={{ zIndex: 0 }}
+      />
       <div className="bg-grid" style={inverseParallax}></div>
 
       {/* ── TOP HUD ─────────────────────────────────── */}
