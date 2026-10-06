@@ -11,12 +11,12 @@ function App() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [cellSize, setCellSize] = useState({ w: 36, h: 36 });
   const containerRef = useRef<HTMLDivElement>(null);
-  const memoryEndRef = useRef<HTMLDivElement>(null);
+  const memoryTrailRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (memoryEndRef.current) {
-      memoryEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (memoryTrailRef.current) {
+      memoryTrailRef.current.scrollTop = memoryTrailRef.current.scrollHeight;
     }
   }, [state.liveMemory.length]);
 
@@ -39,6 +39,13 @@ function App() {
     return gameEngine.subscribe(setState);
   }, []);
 
+  // ── Auto-focus grid so keys work without clicking ─────────────────────
+  useEffect(() => {
+    if (state.gameStatus === 'PLAYING' && gridRef.current) {
+      gridRef.current.focus({ preventScroll: true });
+    }
+  }, [state.gameStatus, state.player.roomId]);
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       const { innerWidth, innerHeight } = window;
@@ -50,20 +57,30 @@ function App() {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (state.gameStatus !== 'PLAYING') return;
-      // Prevent browser scrolling for movement keys
-      switch(e.key) {
-        case 'w': case 'W': case 'ArrowUp': e.preventDefault(); gameEngine.movePlayer(0, -1); break;
-        case 's': case 'S': case 'ArrowDown': e.preventDefault(); gameEngine.movePlayer(0, 1); break;
-        case 'a': case 'A': case 'ArrowLeft': e.preventDefault(); gameEngine.movePlayer(-1, 0); break;
-        case 'd': case 'D': case 'ArrowRight': e.preventDefault(); gameEngine.movePlayer(1, 0); break;
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.gameStatus]);
+  const handleGridKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Prevent page scroll for arrow keys / space
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+      e.preventDefault();
+    }
+
+    // Skip key-repeat events so movement stays snappy with no OS repeat-delay jitter
+    if (e.repeat) return;
+    if (state.gameStatus !== 'PLAYING') return;
+
+    switch(e.key) {
+      case 'w': case 'W': case 'ArrowUp':    gameEngine.movePlayer(0, -1);  break;
+      case 's': case 'S': case 'ArrowDown':  gameEngine.movePlayer(0,  1);  break;
+      case 'a': case 'A': case 'ArrowLeft':  gameEngine.movePlayer(-1, 0);  break;
+      case 'd': case 'D': case 'ArrowRight': gameEngine.movePlayer(1,  0);  break;
+    }
+  };
+
+  // Re-focus grid after any mouse click elsewhere so keys never stop working
+  const handleAppClick = () => {
+    if (state.gameStatus === 'PLAYING' && gridRef.current) {
+      gridRef.current.focus({ preventScroll: true });
+    }
+  };
 
   const parallaxStyle = { transform: `translate(${mousePos.x}px, ${mousePos.y}px)` };
   const inverseParallax = { transform: `translate(${-mousePos.x * 1.5}px, ${-mousePos.y * 1.5}px)` };
@@ -106,6 +123,18 @@ function App() {
         <div className="entrance-controls">
           <span>WASD</span> / <span>ARROWS</span> to move
         </div>
+
+        {/* Skull chain follows mouse on entrance screen */}
+        <SkullChain
+          playerX={0}
+          playerY={0}
+          cellW={48}
+          cellH={48}
+          chainLength={Math.max(3, Math.min(8, 4))}
+          followSpeed={0.07}
+          isHunting={false}
+          gridRef={{ current: null } as React.RefObject<HTMLDivElement>}
+        />
       </div>
     );
   }
@@ -194,7 +223,7 @@ function App() {
   const exitDoor = currentRoom?.doors.find(d => d.label?.includes('EXIT'));
 
   return (
-    <div className="app-container" ref={containerRef}>
+    <div className="app-container" ref={containerRef} onClick={handleAppClick}>
       {/* Hunt vignette overlay — pulses red at screen edges */}
       {vignetteIntensity > 0.1 && (
         <div className="hunt-vignette" style={{ opacity: vignetteIntensity }} />
@@ -284,7 +313,7 @@ function App() {
               <div style={{color: 'var(--text-muted)', margin: '1rem 0 2rem'}}>Proceeding to next level...</div>
             </div>
           ) : (
-            <div className="visual-grid" ref={gridRef} style={{
+            <div className="visual-grid" ref={gridRef} tabIndex={0} onKeyDown={handleGridKeyDown} style={{
               gridTemplateColumns: `repeat(${room?.width || 10}, minmax(20px, 48px))`,
               gridTemplateRows: `repeat(${room?.height || 10}, minmax(20px, 48px))`,
             }}>
@@ -362,9 +391,9 @@ function App() {
           </div>
 
           {/* ECHO MEMORY */}
-          <div className="module-card" style={{flex: 1}}>
-            <div className="module-header">ECHO MEMORY</div>
-            <div className="memory-trail">
+          <div className="module-card memory-card">
+            <div className="module-header">MOVEMENT MEMORY</div>
+            <div className="memory-trail" ref={memoryTrailRef}>
               {state.liveMemory.length === 0 && <div style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>Analyzing player patterns...</div>}
               {state.liveMemory.map((mem) => {
                 const isDanger = mem.message.includes('aggressive') || mem.message.includes('reckless');
@@ -387,7 +416,6 @@ function App() {
                   </div>
                 );
               })}
-              <div ref={memoryEndRef} />
             </div>
           </div>
 
@@ -428,18 +456,16 @@ function App() {
       )}
 
       {/* SKULL CHAIN — Globally overlaid across the entire webpage */}
-      {!isExitRoom && gridRef.current && (
-        <SkullChain
-          playerX={state.player.x}
-          playerY={state.player.y}
-          cellW={cellSize.w}
-          cellH={cellSize.h}
-          chainLength={chainLength}
-          followSpeed={followSpeed}
-          isHunting={isHunting}
-          gridRef={gridRef}
-        />
-      )}
+      <SkullChain
+        playerX={state.player.x}
+        playerY={state.player.y}
+        cellW={cellSize.w || 48}
+        cellH={cellSize.h || 48}
+        chainLength={chainLength}
+        followSpeed={followSpeed}
+        isHunting={isHunting}
+        gridRef={gridRef}
+      />
     </div>
   );
 }

@@ -22,6 +22,16 @@ export default function SkullChain({ playerX, playerY, cellW, cellH, chainLength
   const segmentsRef = useRef<{ x: number; y: number }[]>([]);
   const lastGrid = useRef({ x: playerX, y: playerY });
 
+  const mouseRef = useRef({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+
+  useEffect(() => {
+    const handleMouse = (e: MouseEvent) => {
+      mouseRef.current = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener('mousemove', handleMouse);
+    return () => window.removeEventListener('mousemove', handleMouse);
+  }, []);
+
   useEffect(() => {
     const px = playerX * cellW + cellW / 2;
     const py = playerY * cellH + cellH / 2;
@@ -51,7 +61,8 @@ export default function SkullChain({ playerX, playerY, cellW, cellH, chainLength
       
       let offsetX = 0;
       let offsetY = 0;
-      if (gridRef.current) {
+      const hasGrid = !!gridRef.current;
+      if (hasGrid) {
          const rect = gridRef.current.getBoundingClientRect();
          offsetX = rect.left;
          offsetY = rect.top;
@@ -59,10 +70,19 @@ export default function SkullChain({ playerX, playerY, cellW, cellH, chainLength
 
       for (let i = 0; i < chainLength; i++) {
         let tx: number, ty: number;
-        const idx = history.length - 1 - i * SPACING_STEPS;
-        if (idx >= 0) { tx = history[idx].x; ty = history[idx].y; }
-        else if (i === 0) { tx = lastGrid.current.x * cellW + cellW / 2; ty = lastGrid.current.y * cellH + cellH / 2; }
-        else { tx = segs[i - 1]?.x ?? 0; ty = segs[i - 1]?.y ?? 0; }
+        
+        if (!hasGrid) {
+          // When not in a grid (e.g. entrance screen), follow mouse globally
+          tx = mouseRef.current.x;
+          ty = mouseRef.current.y;
+          offsetX = 0;
+          offsetY = 0;
+        } else {
+          const idx = history.length - 1 - i * SPACING_STEPS;
+          if (idx >= 0) { tx = history[idx].x; ty = history[idx].y; }
+          else if (i === 0) { tx = lastGrid.current.x * cellW + cellW / 2; ty = lastGrid.current.y * cellH + cellH / 2; }
+          else { tx = segs[i - 1]?.x ?? 0; ty = segs[i - 1]?.y ?? 0; }
+        }
 
         const speed = Math.max(0.03, followSpeed * (1 - i * 0.03));
         segs[i].x += (tx - segs[i].x) * speed;
