@@ -1,6 +1,17 @@
 import type { GameState, Room, GemmaDecision } from './types';
 import { gemmaProvider } from './GemmaProvider';
 
+// Deterministic ECHO observation phrases based on pattern
+const ECHO_OBSERVATIONS = [
+  { trigger: (h: string[]) => h.filter(a => a === 'MOVE_EAST').length >= 4, msg: 'You keep going right.' },
+  { trigger: (h: string[]) => h.filter(a => a === 'MOVE_WEST').length >= 4, msg: 'You keep going left.' },
+  { trigger: (h: string[]) => h.filter(a => a === 'MOVE_NORTH').length >= 4, msg: 'You keep going north.' },
+  { trigger: (h: string[]) => h.filter(a => a === 'MOVE_SOUTH').length >= 4, msg: 'You keep going south.' },
+  { trigger: (h: string[]) => h.slice(-6).every(a => a === h[h.length-1]), msg: 'Interesting. You have not changed direction.' },
+  { trigger: (h: string[]) => { const l = h.slice(-10); return l.filter(a => a === 'ATTACK_ENEMY').length >= 3; }, msg: 'You are highly aggressive.' },
+  { trigger: (h: string[]) => { const l = h.slice(-10); return l.filter(a => a.startsWith('PICKUP')).length >= 2; }, msg: 'You scavenge everything you find.' },
+];
+
 const INITIAL_ROOMS: Record<string, Room> = {
   room_1: {
     id: 'room_1',
@@ -67,6 +78,9 @@ export class GameEngine {
   state: GameState;
   listeners: Set<(state: GameState) => void> = new Set();
   actionHistory: string[] = [];
+  moveHistory: string[] = [];   // raw move directions for pattern detection
+  moveCount: number = 0;        // total moves, for observation cadence
+  lastObservationMove = 0;      // move index when we last emitted a local observation
 
   constructor() {
     this.state = this.getInitialState();
@@ -87,15 +101,23 @@ export class GameEngine {
         aggression: 0.5,
         exploration: 0.5,
         riskTaking: 0.5,
-        routePreference: 'none',
-        resourceUsage: 0,
-        repeatedActions: 0
+        routeRepetition: 0,
+        hesitation: 0,
+        enemyAvoidance: 0,
+        resourceDependence: 0,
+        combatPreference: 0.5,
+        preferredRoute: 'none',
+        actionsObserved: 0
       },
       world: {
         rooms: JSON.parse(JSON.stringify(INITIAL_ROOMS)) // Deep copy
       },
       logs: ['Game initialized.'],
-      gemmaStatus: 'Idle',
+      gemmaStatus: 'OBSERVING',
+      awarenessLevel: 1,
+      liveMemory: [],
+      playerTrail: [],
+      predictability: 0,
       lastDecision: null,
       gameStatus: 'START',
       level: 1
@@ -105,6 +127,9 @@ export class GameEngine {
   startGame() {
     this.state = this.getInitialState();
     this.state.gameStatus = 'PLAYING';
+    this.moveHistory = [];
+    this.moveCount = 0;
+    this.lastObservationMove = 0;
     this.log('Entered ECHO facility.');
     this.notify();
   }
@@ -121,6 +146,19 @@ export class GameEngine {
 
   log(msg: string) {
     this.state.logs = [msg, ...this.state.logs].slice(0, 10);
+  }
+
+  addMemoryEvent(type: 'MOVE' | 'COMBAT' | 'PICKUP' | 'ROUTE' | 'OBSERVATION' | 'INTERVENTION', message: string, pos?: {x: number, y: number}) {
+    this.state.liveMemory.push({
+      id: Math.random().toString(36).substr(2, 9),
+      timestamp: Date.now(),
+      type,
+      message,
+      position: pos
+    });
+    if (this.state.liveMemory.length > 50) {
+      this.state.liveMemory.shift();
+    }
   }
 
   movePlayer(dx: number, dy: number) {
@@ -161,6 +199,49 @@ export class GameEngine {
     // Move
     player.x = nx;
     player.y = ny;
+    
+    this.state.playerTrail.push({ x: nx, y: ny });
+    if (this.state.playerTrail.length > 6) this.state.playerTrail.shift();
+    
+    let dir = 'UNKNOWN';
+    if (dy === -1) dir = 'NORTH';
+    if (dy === 1) dir = 'SOUTH';
+    if (dx === -1) dir = 'WEST';
+    if (dx === 1) dir = 'EAST';
+    
+    this.addMemoryEvent('MOVE', `PLAYER MOVED ${dir}`, {x: nx, y: ny});
+    
+    // Track direction for pattern detection
+    this.moveHistory.push(`MOVE_${dir}`);
+    if (this.moveHistory.length > 40) this.moveHistory.shift();
+    this.moveCount++;
+
+    // Update predictability: same direction = +, change = -
+    const recent = this.moveHistory.slice(-4);
+    const allSame = recent.length >= 4 && recent.every(m => m === recent[0]);
+    if (allSame) {
+      this.state.predictability = Math.min(1, this.state.predictability + 0.06);
+    } else if (recent.length >= 2 && recent[recent.length-1] !== recent[recent.length-2]) {
+      this.state.predictability = Math.max(0, this.state.predictability - 0.04);
+    }
+
+    // Pattern break reward
+    if (this.state.predictability < 0.2 && this.moveCount > 10) {
+      if (!this.state.liveMemory.some(m => m.message === 'I did not expect that.')) {
+        this.addMemoryEvent('OBSERVATION', 'I did not expect that.');
+      }
+    }
+
+    // Local ECHO observation every 8 moves
+    if (this.moveCount - this.lastObservationMove >= 8) {
+      this.lastObservationMove = this.moveCount;
+      for (const obs of ECHO_OBSERVATIONS) {
+        if (obs.trigger(this.moveHistory) && !this.state.liveMemory.slice(-6).some(m => m.message === obs.msg)) {
+          this.addMemoryEvent('OBSERVATION', obs.msg);
+          break;
+        }
+      }
+    }
 
     // Check items
     const itemIdx = room.items.findIndex(i => i.x === player.x && i.y === player.y);
@@ -242,14 +323,31 @@ export class GameEngine {
     // Update profile
     if (action.startsWith('ROUTE_')) {
       const route = action.split('_')[1];
-      this.state.behavior.routePreference = route;
+      this.state.behavior.preferredRoute = route;
       const recentRoutes = this.actionHistory.filter(a => a.startsWith('ROUTE_'));
-      if (recentRoutes.length >= 3 && recentRoutes.slice(-3).every(r => r === `ROUTE_${route}`)) {
-        this.state.behavior.repeatedActions++;
+      if (recentRoutes.length >= 2 && recentRoutes.slice(-2).every(r => r === `ROUTE_${route}`)) {
+        this.state.behavior.routeRepetition++;
+        if (this.state.behavior.routeRepetition > 1 && !this.state.liveMemory.some(m => m.message === 'You rely on the same routes.')) {
+          this.addMemoryEvent('OBSERVATION', 'You rely on the same routes.');
+          this.notify();
+        }
       }
     }
     if (action === 'ATTACK_ENEMY') {
-      this.state.behavior.aggression = Math.min(1.0, this.state.behavior.aggression + 0.1);
+      this.addMemoryEvent('COMBAT', 'ATTACKED ENEMY');
+      this.state.behavior.aggression = Math.min(1.0, this.state.behavior.aggression + 0.15);
+      if (this.state.behavior.aggression > 0.5 && !this.state.liveMemory.some(m => m.message === 'You are highly aggressive.')) {
+        this.addMemoryEvent('OBSERVATION', 'You are highly aggressive.');
+        this.notify();
+      }
+    }
+    if (action.startsWith('PICKUP_')) {
+      const itemType = action.split('_')[1];
+      this.addMemoryEvent('PICKUP', `COLLECTED ${itemType}`);
+      if (!this.state.liveMemory.some(m => m.message === 'You scavenge for resources.')) {
+        this.addMemoryEvent('OBSERVATION', 'You scavenge for resources.');
+        this.notify();
+      }
     }
 
     // Trigger AI every 4 significant actions
@@ -260,9 +358,9 @@ export class GameEngine {
 
   // Called periodically or on room enter
   async triggerAIAnalysis() {
-    if (this.state.gemmaStatus === 'Processing') return;
+    if (this.state.gemmaStatus === 'ANALYZING' || this.state.gemmaStatus === 'ADAPTING' || this.state.gemmaStatus === 'HUNTING') return;
     
-    this.state.gemmaStatus = 'Processing';
+    this.state.gemmaStatus = 'ANALYZING';
     this.notify();
 
     const start = Date.now();
@@ -270,7 +368,23 @@ export class GameEngine {
     const latency = Date.now() - start;
 
     if (decision) {
-      this.state.gemmaStatus = 'Idle';
+      this.state.gemmaStatus = 'ADAPTING';
+      this.notify();
+      
+      // Update awareness level based on AI interventions
+      if (this.state.awarenessLevel < 5) {
+        this.state.awarenessLevel++;
+      }
+      
+      // Add a session memory based on behavior
+      if (this.state.behavior.routeRepetition > 2 && !this.state.liveMemory.some(m => m.message === 'You rely on the same routes.')) {
+        this.addMemoryEvent('OBSERVATION', 'You rely on the same routes.');
+      } else if (this.state.behavior.aggression > 0.6 && !this.state.liveMemory.some(m => m.message === 'You are highly aggressive.')) {
+        this.addMemoryEvent('OBSERVATION', 'You are highly aggressive.');
+      } else if (decision.action === 'CREATE_HAZARD' && !this.state.liveMemory.some(m => m.message === 'You are reckless with traps.')) {
+        this.addMemoryEvent('OBSERVATION', 'You are reckless with traps.');
+      }
+
       this.applyGemmaDecision(decision);
       this.log(`[LATENCY] AI processed in ${latency}ms`);
     } else {
@@ -286,6 +400,7 @@ export class GameEngine {
   }
 
   applyGemmaDecision(decision: GemmaDecision) {
+    this.addMemoryEvent('INTERVENTION', `AI ACTION: ${decision.action.replace(/_/g, ' ')}`);
     this.log(`AI DECISION: ${decision.action}`);
     this.state.lastDecision = decision;
 
@@ -342,6 +457,13 @@ export class GameEngine {
           this.log(`Hazards have appeared.`);
         }
         break;
+    }
+    
+    // Set state back to OBSERVING or HUNTING
+    if (this.state.awarenessLevel >= 5) {
+      this.state.gemmaStatus = 'HUNTING';
+    } else {
+      this.state.gemmaStatus = 'OBSERVING';
     }
     
     // Auto clear last decision banner after 4 seconds

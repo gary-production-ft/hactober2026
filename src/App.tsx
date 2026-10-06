@@ -1,15 +1,39 @@
 import { useEffect, useState, useRef } from 'react';
 import { gameEngine } from './game/engine';
 import type { GameState } from './game/types';
-import { Heart, Crosshair, Skull, DoorOpen, Key, AlertOctagon, LogOut, ShieldAlert, Map } from 'lucide-react';
+import { Heart, Crosshair, Skull, DoorOpen, Key, AlertOctagon, LogOut, ShieldAlert } from 'lucide-react';
 import Waves from './Waves';
+import SkullChain from './SkullChain';
 import './App.css';
 
 function App() {
   const [state, setState] = useState<GameState>(gameEngine.state);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [showLegend, setShowLegend] = useState(false);
+  const [cellSize, setCellSize] = useState({ w: 36, h: 36 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const memoryEndRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (memoryEndRef.current) {
+      memoryEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [state.liveMemory.length]);
+
+  // Measure grid cell size so skull chain knows pixel positions
+  useEffect(() => {
+    const measure = () => {
+      if (!gridRef.current) return;
+      const cell = gridRef.current.querySelector('.cell');
+      if (cell) {
+        const r = cell.getBoundingClientRect();
+        setCellSize({ w: r.width, h: r.height });
+      }
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [state.player.roomId]);
 
   useEffect(() => {
     return gameEngine.subscribe(setState);
@@ -29,6 +53,7 @@ function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (state.gameStatus !== 'PLAYING') return;
+      // Prevent browser scrolling for movement keys
       switch(e.key) {
         case 'w': case 'W': case 'ArrowUp': e.preventDefault(); gameEngine.movePlayer(0, -1); break;
         case 's': case 'S': case 'ArrowDown': e.preventDefault(); gameEngine.movePlayer(0, 1); break;
@@ -47,7 +72,7 @@ function App() {
   if (state.gameStatus === 'START') {
     return (
       <div className="entrance-screen" ref={containerRef}>
-        {/* WAVES BACKGROUND — fills behind everything */}
+        {/* WAVES BACKGROUND */}
         <Waves
           lineColor="rgba(0, 240, 255, 0.08)"
           backgroundColor="transparent"
@@ -62,31 +87,24 @@ function App() {
           yGap={40}
           style={{ zIndex: 0 }}
         />
-        <div className="system-info sys-top-left" style={parallaxStyle}>WORLD STATUS: STABLE<br/>PLAYER: NOT DETECTED</div>
-        <div className="system-info sys-top-right" style={parallaxStyle}>AI CORE: READY</div>
+        <div className="system-info sys-top-left" style={parallaxStyle}>SYSTEM INSTANCE // 04<br/>I HAVE BEEN WATCHING.</div>
+        <div className="system-info sys-top-right" style={parallaxStyle}>PLAYER PATTERN: UNKNOWN<br/>[ INITIALIZING OBSERVATION ]</div>
 
         <h1 className="title-ech0" style={inverseParallax}>
           <span>E</span><span>C</span><span>H</span><span>O</span>
         </h1>
-        <div className="entrance-subtitle">THE WORLD IS WATCHING HOW YOU PLAY.</div>
-
-        {/* WHAT IS ECHO quick pitch */}
+        
         <div className="entrance-pitch">
-          Navigate a dangerous facility across 3 levels.<br/>
-          <span>Gemma AI</span> watches your every move and adapts the world to stop you.
+          The environment reacts to your choices.<br/>
+          <span>ECHO</span> learns your behavior and counters your strategy.
         </div>
 
         <button className="btn-enter" onClick={() => gameEngine.startGame()}>
-          ENTER THE WORLD
+          [ ENTER THE FACILITY ]
         </button>
 
-        {/* CONTROLS HINT */}
         <div className="entrance-controls">
-          <span>WASD</span> or <span>ARROW KEYS</span> to move &nbsp;·&nbsp; Walk into tiles to interact
-        </div>
-
-        <div className="system-info" style={{bottom: '2rem', textAlign: 'center', opacity: 0.6}}>
-          <span style={{color: 'var(--cyan)'}}>◉</span> GEMMA 4 // ONLINE — ADAPTIVE WORLD SYSTEM READY
+          <span>WASD</span> / <span>ARROWS</span> to move
         </div>
       </div>
     );
@@ -101,6 +119,7 @@ function App() {
     for (let y = 0; y < room.height; y++) {
       for (let x = 0; x < room.width; x++) {
         const isPlayer = state.player.x === x && state.player.y === y;
+        const trailIndex = state.playerTrail.findIndex(p => p.x === x && p.y === y);
         const door = room.doors.find(d => d.x === x && d.y === y);
         const enemy = room.enemies.find(e => e.x === x && e.y === y);
         const item = room.items.find(i => i.x === x && i.y === y);
@@ -115,6 +134,10 @@ function App() {
           cellClass += ' player';
           content = <Crosshair size={22} />;
           tooltip = 'YOU';
+        } else if (trailIndex !== -1) {
+          cellClass += ' trail';
+          const opacity = 0.1 + (trailIndex / state.playerTrail.length) * 0.3;
+          content = <div style={{width: 6, height: 6, borderRadius: '50%', background: `rgba(255,255,255,${opacity})`}}></div>;
         } else if (enemy) {
           cellClass += ' enemy';
           content = <Skull size={18} />;
@@ -147,14 +170,24 @@ function App() {
   }
 
   const getGemmaStatusLabel = () => {
-    if (state.gemmaStatus === 'Processing') return 'ANALYZING';
-    if (state.gemmaStatus === 'Timeout') return 'FALLBACK';
-    if (state.lastDecision) return 'ADAPTED';
-    return 'OBSERVING';
+    return state.gemmaStatus;
+  };
+  
+  const renderBar = (val: number) => {
+    const filled = Math.round(val * 10);
+    return '█'.repeat(filled) + '░'.repeat(10 - filled);
   };
 
   const hpPercent = (state.player.hp / state.player.maxHp) * 100;
   const hpColor = hpPercent > 50 ? 'var(--cyan)' : hpPercent > 25 ? '#ffa502' : 'var(--crimson)';
+  const isHunting = state.gemmaStatus === 'HUNTING';
+
+  // Skull chain parameters based on awareness
+  const chainLength = Math.min(8, state.awarenessLevel * 2);
+  const followSpeed = 0.04 + state.awarenessLevel * 0.015 + (state.predictability || 0) * 0.05;
+
+  // Vignette intensity: ramps with predictability and hunting
+  const vignetteIntensity = Math.min(1, (state.predictability || 0) * 0.8 + (isHunting ? 0.4 : 0));
 
   // Find exit door to tell player where to go
   const currentRoom = state.world.rooms[state.player.roomId];
@@ -162,6 +195,10 @@ function App() {
 
   return (
     <div className="app-container" ref={containerRef}>
+      {/* Hunt vignette overlay — pulses red at screen edges */}
+      {vignetteIntensity > 0.1 && (
+        <div className="hunt-vignette" style={{ opacity: vignetteIntensity }} />
+      )}
       {/* WAVES BACKGROUND — fills behind everything on game page */}
       <Waves
         lineColor="rgba(0, 240, 255, 0.05)"
@@ -206,15 +243,12 @@ function App() {
           </div>
         </div>
 
-        {/* GEMMA STATUS + LEGEND TOGGLE */}
+        {/* GEMMA STATUS */}
         <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
-          <div className="hud-module" style={{color: state.gemmaStatus === 'Timeout' ? 'var(--crimson)' : 'var(--cyan)'}}>
-            <div className="indicator" style={{background: state.gemmaStatus === 'Timeout' ? 'var(--crimson)' : 'var(--cyan)'}}></div>
-            GEMMA // {getGemmaStatusLabel()}
+          <div className={`hud-module status-${state.gemmaStatus.toLowerCase()}`}>
+            <div className="indicator"></div>
+            ECHO ● {getGemmaStatusLabel()}
           </div>
-          <button className="legend-btn" onClick={() => setShowLegend(v => !v)} title="Show legend">
-            <Map size={16} />
-          </button>
         </div>
       </div>
 
@@ -243,21 +277,6 @@ function App() {
             </div>
           )}
 
-          {/* LEGEND POPUP */}
-          {showLegend && (
-            <div className="legend-popup">
-              <div className="legend-title">LEGEND</div>
-              <div className="legend-item"><span className="lc player-c"><Crosshair size={14}/></span> YOU</div>
-              <div className="legend-item"><span className="lc enemy-c"><Skull size={14}/></span> ENEMY — Walk into to attack</div>
-              <div className="legend-item"><span className="lc door-c"><DoorOpen size={14}/></span> DOOR — Walk in to travel</div>
-              <div className="legend-item"><span className="lc exit-c"><LogOut size={14}/></span> EXIT — Your objective!</div>
-              <div className="legend-item"><span className="lc lock-c"><ShieldAlert size={14}/></span> LOCKED — Need a KEY</div>
-              <div className="legend-item"><span className="lc key-c"><Key size={14}/></span> KEY — Walk onto to pick up</div>
-              <div className="legend-item"><span className="lc hp-c"><Heart size={14}/></span> HEALTH — Walk onto to heal</div>
-              <div className="legend-item"><span className="lc hazard-c"><AlertOctagon size={14}/></span> HAZARD — AI trap, avoid it!</div>
-              <div className="legend-controls">WASD / ARROW KEYS to move</div>
-            </div>
-          )}
 
           {isExitRoom ? (
             <div className="exit-reached-inner">
@@ -265,13 +284,26 @@ function App() {
               <div style={{color: 'var(--text-muted)', margin: '1rem 0 2rem'}}>Proceeding to next level...</div>
             </div>
           ) : (
-            <div className="visual-grid" style={{
+            <div className="visual-grid" ref={gridRef} style={{
               gridTemplateColumns: `repeat(${room?.width || 10}, minmax(20px, 48px))`,
               gridTemplateRows: `repeat(${room?.height || 10}, minmax(20px, 48px))`,
             }}>
               {gridCells}
             </div>
           )}
+
+          {/* TOUCH CONTROLS */}
+          <div className="touch-controls">
+            <div className="dpad">
+              <button className="dpad-btn up" onClick={() => gameEngine.movePlayer(0, -1)}>↑</button>
+              <div className="dpad-row">
+                <button className="dpad-btn left" onClick={() => gameEngine.movePlayer(-1, 0)}>←</button>
+                <div className="dpad-center">●</div>
+                <button className="dpad-btn right" onClick={() => gameEngine.movePlayer(1, 0)}>→</button>
+              </div>
+              <button className="dpad-btn down" onClick={() => gameEngine.movePlayer(0, 1)}>↓</button>
+            </div>
+          </div>
         </div>
 
         {/* ── SIDE PANEL ────────────────────────────────── */}
@@ -290,28 +322,41 @@ function App() {
 
           {/* AI INTELLIGENCE */}
           <div className="module-card">
-            <div className="module-header">ECHO // WORLD INTELLIGENCE</div>
+            <div className="module-header">ECHO INSIGHT</div>
+            
             <div className="profile-stat">
-              <span>AGGRESSION</span>
-              <span>{Math.round(state.behavior.aggression * 100)}%</span>
+              <div style={{marginBottom: '0.2rem'}}>AGGRESSION</div>
+              <div><span style={{color: 'var(--cyan)'}}>{renderBar(state.behavior.aggression)}</span> {Math.round(state.behavior.aggression * 100)}%</div>
             </div>
             <div className="profile-stat">
-              <span>ROUTE REPETITION</span>
-              <span>{state.behavior.repeatedActions}x</span>
+              <div style={{marginBottom: '0.2rem'}}>RISK TAKING</div>
+              <div><span style={{color: 'var(--cyan)'}}>{renderBar(state.behavior.riskTaking)}</span> {Math.round(state.behavior.riskTaking * 100)}%</div>
+            </div>
+            <div className="profile-stat">
+              <div style={{marginBottom: '0.2rem'}}>EXPLORATION</div>
+              <div><span style={{color: 'var(--cyan)'}}>{renderBar(state.behavior.exploration)}</span> {Math.round(state.behavior.exploration * 100)}%</div>
             </div>
 
+            <div style={{marginTop: '1.5rem', marginBottom: '0.5rem', fontFamily: 'Space Mono', fontSize: '0.7rem', color: 'var(--text-muted)'}}>
+              AWARENESS LEVEL: 0{state.awarenessLevel} &nbsp;|&nbsp; SKULLS: {chainLength}
+            </div>
+
+            <div className="profile-stat" style={{marginTop: '0.5rem'}}>
+              <div style={{marginBottom: '0.2rem', color: state.predictability > 0.6 ? 'var(--crimson)' : 'var(--text-muted)'}}>
+                PREDICTABILITY {state.predictability > 0.6 ? '⚠' : ''}
+              </div>
+              <div>
+                <span style={{color: state.predictability > 0.5 ? 'var(--crimson)' : 'var(--cyan)'}}>
+                  {renderBar(state.predictability || 0)}
+                </span> {Math.round((state.predictability || 0) * 100)}%
+              </div>
+            </div>
+            
             {state.lastDecision && (
               <div className="last-decision-card">
                 <div style={{fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.4rem'}}>LAST AI ACTION</div>
                 <div style={{color: 'var(--cyan)', fontWeight: 700, marginBottom: '0.3rem'}}>{state.lastDecision.action.replace(/_/g, ' ')}</div>
                 <div style={{fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic'}}>"{state.lastDecision.reason}"</div>
-              </div>
-            )}
-
-            {state.gemmaStatus === 'Timeout' && (
-              <div className="last-decision-card" style={{borderColor: 'var(--crimson)'}}>
-                <div style={{color: 'var(--crimson)', fontWeight: 700}}>DECISION REJECTED</div>
-                <div style={{fontSize: '0.7rem', color: 'var(--text-muted)'}}>Fallback controller active</div>
               </div>
             )}
           </div>
@@ -320,28 +365,52 @@ function App() {
           <div className="module-card" style={{flex: 1}}>
             <div className="module-header">ECHO MEMORY</div>
             <div className="memory-trail">
-              {state.logs.map((log, i) => (
-                <div key={i} className={`mem-node ${log.includes('AI') || log.includes('GUARD') || log.includes('FALLBACK') ? 'ai' : ''} ${log.includes('HAZARD') || log.includes('died') || log.includes('hits back') ? 'alert' : ''}`}>
-                  <div className="mem-dot"></div>
-                  <span>{log}</span>
-                </div>
-              ))}
+              {state.liveMemory.length === 0 && <div style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>Analyzing player patterns...</div>}
+              {state.liveMemory.map((mem) => {
+                const isDanger = mem.message.includes('aggressive') || mem.message.includes('reckless');
+                
+                let icon = '·';
+                if (mem.type === 'MOVE') icon = '→';
+                if (mem.type === 'COMBAT') icon = '⚔';
+                if (mem.type === 'PICKUP') icon = '◆';
+                if (mem.type === 'ROUTE') icon = '↳';
+                if (mem.type === 'OBSERVATION') icon = '◉';
+                if (mem.type === 'INTERVENTION') icon = '⚠';
+
+                return (
+                  <div key={mem.id} className={`mem-node ai ${isDanger || mem.type === 'INTERVENTION' ? 'alert-anim' : ''}`}>
+                    <div className="mem-icon">{icon}</div>
+                    <span>
+                      {isDanger || mem.type === 'INTERVENTION' ? <Skull size={12} style={{display: 'inline', verticalAlign: 'middle', marginRight: '4px', color: 'var(--crimson)'}} /> : null}
+                      {mem.message}
+                    </span>
+                  </div>
+                );
+              })}
+              <div ref={memoryEndRef} />
             </div>
           </div>
 
         </div>
       </div>
 
-      {/* ── END STATE OVERLAYS (INSIDE PAGE 2) ────────── */}
+      {/* ── END STATE OVERLAYS ────────── */}
       {state.gameStatus === 'GAME_OVER' && (
         <div className="overlay-cinematic">
-          <h1 className="win-title" style={{color: 'var(--crimson)'}}>ECHO ADAPTED FASTER.</h1>
-          <div className="overlay-subtitle">Your strategy was detected. The world won.</div>
+          <h1 className="win-title" style={{color: 'var(--crimson)', fontSize: '4rem'}}>SESSION TERMINATED</h1>
+          <div className="overlay-subtitle">ECHO SUCCESSFULLY PREDICTED YOU.</div>
+          
           <div className="win-stats">
-            <div><span>HP REMAINING</span><span>0</span></div>
-            <div><span>LEVEL REACHED</span><span>{state.level}</span></div>
+            <div><span>ROUTE PREFERENCE</span><span>{state.behavior.preferredRoute.toUpperCase() || 'UNKNOWN'}</span></div>
+            <div><span>AGGRESSION</span><span>{Math.round(state.behavior.aggression * 100)}%</span></div>
+            <div><span>RISK TAKING</span><span>{Math.round(state.behavior.riskTaking * 100)}%</span></div>
           </div>
-          <button className="btn-enter" onClick={() => gameEngine.startGame()}>TRY AGAIN</button>
+
+          <div style={{color: 'var(--cyan)', fontStyle: 'italic', marginBottom: '2rem'}}>
+            "You are becoming predictable."
+          </div>
+
+          <button className="btn-enter" onClick={() => gameEngine.startGame()}>[ PROVE IT WRONG ]</button>
         </div>
       )}
 
@@ -356,6 +425,20 @@ function App() {
           <button className="btn-enter" onClick={() => gameEngine.startGame()}>PLAY AGAIN</button>
           <div className="world-remembers">THE WORLD REMEMBERS.</div>
         </div>
+      )}
+
+      {/* SKULL CHAIN — Globally overlaid across the entire webpage */}
+      {!isExitRoom && gridRef.current && (
+        <SkullChain
+          playerX={state.player.x}
+          playerY={state.player.y}
+          cellW={cellSize.w}
+          cellH={cellSize.h}
+          chainLength={chainLength}
+          followSpeed={followSpeed}
+          isHunting={isHunting}
+          gridRef={gridRef}
+        />
       )}
     </div>
   );

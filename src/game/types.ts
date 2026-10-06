@@ -48,13 +48,36 @@ export type PlayerState = {
   timeAlive: number;
 };
 
+export type PlayerAction = {
+  type: string;
+  timestamp: number;
+  roomId: string;
+  position: { x: number; y: number };
+  hp: number;
+  target?: string;
+  risk?: number;
+};
+
+export type MemoryEvent = {
+  id: string;
+  timestamp: number;
+  type: 'MOVE' | 'COMBAT' | 'PICKUP' | 'ROUTE' | 'OBSERVATION' | 'INTERVENTION';
+  message: string;
+  roomId?: string;
+  position?: { x: number; y: number };
+};
+
 export type PlayerProfile = {
   aggression: number;
   exploration: number;
   riskTaking: number;
-  routePreference: string;
-  resourceUsage: number;
-  repeatedActions: number;
+  routeRepetition: number;
+  hesitation: number;
+  enemyAvoidance: number;
+  resourceDependence: number;
+  combatPreference: number;
+  preferredRoute: string;
+  actionsObserved: number;
 };
 
 export type GameState = {
@@ -64,14 +87,18 @@ export type GameState = {
     rooms: Record<string, Room>;
   };
   logs: string[];
-  gemmaStatus: 'Idle' | 'Processing' | 'Timeout' | 'Error';
+  gemmaStatus: 'OBSERVING' | 'ANALYZING' | 'LEARNING' | 'ADAPTING' | 'HUNTING' | 'Timeout' | 'Error';
+  awarenessLevel: number;
+  predictability: number;
+  liveMemory: MemoryEvent[];
+  playerTrail: Position[];
   lastDecision: any;
   gameStatus: 'START' | 'PLAYING' | 'GAME_OVER' | 'VICTORY';
   level: number;
 };
 
 export type GemmaDecision = {
-  action: 'SPAWN_ENEMY' | 'CHANGE_ENEMY_BEHAVIOR' | 'ALTER_ROUTE' | 'LOCK_DOOR' | 'UNLOCK_DOOR' | 'SPAWN_REWARD' | 'CREATE_HAZARD';
+  action: 'SPAWN_ENEMY' | 'CHANGE_ENEMY_BEHAVIOR' | 'ALTER_ROUTE' | 'LOCK_DOOR' | 'UNLOCK_DOOR' | 'SPAWN_REWARD' | 'CREATE_HAZARD' | 'MOVE_RESOURCE';
   target?: string;
   intensity?: number;
   reason: string;

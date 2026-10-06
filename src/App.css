@@ -130,7 +130,7 @@ body {
 .app-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh;
   position: relative;
   z-index: 10;
 }
@@ -674,4 +674,96 @@ body {
     max-width: 100%;
     overflow: hidden;
   }
+}
+
+/* ── HUNT VIGNETTE ─────────────────────────────────────────────────── */
+.hunt-vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+  background: radial-gradient(ellipse at center,
+    transparent 40%,
+    rgba(255, 0, 60, 0.12) 70%,
+    rgba(255, 0, 60, 0.35) 100%
+  );
+  animation: vignettePulse 2s ease-in-out infinite;
+}
+
+@keyframes vignettePulse {
+  0%, 100% { transform: scale(1); opacity: var(--v-opacity, 1); }
+  50%       { transform: scale(1.02); opacity: calc(var(--v-opacity, 1) * 0.7); }
+}
+
+/* ── PLAYER CELL: bounce on move ──────────────────────────────────── */
+.cell.player {
+  background: #fff;
+  box-shadow: 0 0 30px var(--cyan-glow), inset 0 0 10px var(--cyan);
+  color: var(--cyan);
+  z-index: 10;
+  transform: scale(1.1);
+  animation: playerBob 1.2s ease-in-out infinite;
+}
+
+@keyframes playerBob {
+  0%, 100% { transform: scale(1.1) translateY(0px);   box-shadow: 0 0 30px var(--cyan-glow); }
+  50%       { transform: scale(1.08) translateY(-3px); box-shadow: 0 0 45px var(--cyan-glow), 0 8px 20px rgba(0,0,0,0.6); }
+}
+
+/* ── ENEMY: idle stalk animation ─────────────────────────────────── */
+.cell.enemy {
+  background: rgba(255,0,60,0.1);
+  border: 1px solid var(--crimson);
+  color: var(--crimson);
+  box-shadow: 0 0 15px var(--crimson-glow);
+  animation: enemyStalk 1.8s ease-in-out infinite;
+}
+
+@keyframes enemyStalk {
+  0%, 100% { transform: scale(1)    translateY(0);    box-shadow: 0 0 15px var(--crimson-glow); }
+  33%       { transform: scale(1.08) translateY(-2px); box-shadow: 0 0 25px var(--crimson-glow); }
+  66%       { transform: scale(0.96) translateY(1px);  box-shadow: 0 0 8px  var(--crimson-glow); }
+}
+
+/* ── HAZARD: flickering warning ─────────────────────────────────── */
+.cell.hazard {
+  color: #ff9900;
+  border: 1px dashed #ff9900;
+  animation: hazardFlicker 0.9s ease-in-out infinite;
+}
+
+@keyframes hazardFlicker {
+  0%, 100% { opacity: 1;    border-style: dashed; box-shadow: 0 0 10px rgba(255,153,0,0.4); }
+  25%       { opacity: 0.6; border-style: solid;  box-shadow: 0 0 20px rgba(255,153,0,0.8); }
+  50%       { opacity: 0.9; }
+  75%       { opacity: 0.5; box-shadow: none; }
+}
+
+/* ── ITEM: floating pickup ──────────────────────────────────────── */
+.cell.item {
+  color: #00ff9d;
+  box-shadow: inset 0 0 15px rgba(0,255,157,0.3);
+  animation: itemFloat 2s ease-in-out infinite;
+}
+
+@keyframes itemFloat {
+  0%, 100% { transform: translateY(0)    scale(1); }
+  50%       { transform: translateY(-4px) scale(1.08); }
+}
+
+/* ── DOOR: subtle breathe ───────────────────────────────────────── */
+.cell.door.safe { border: 1px solid var(--cyan); color: var(--cyan); animation: doorBreath 3s ease-in-out infinite; }
+.cell.door.dangerous { border: 1px solid var(--crimson); color: var(--crimson); animation: doorBreath 1.5s ease-in-out infinite; }
+
+@keyframes doorBreath {
+  0%, 100% { box-shadow: 0 0 5px currentColor; }
+  50%       { box-shadow: 0 0 18px currentColor; }
+}
+
+/* ── SKULL CHAIN segments ─────────────────────────────────────────── */
+.skull-seg {
+  will-change: transform;
+  /* filter applied per-element inline; just ensure pointer-events off */
+  pointer-events: none;
+  user-select: none;
 }

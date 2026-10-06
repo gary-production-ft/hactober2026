@@ -9,15 +9,9 @@ export class GemmaProvider {
 
   async generateDecision(state: GameState): Promise<GemmaDecision | null> {
     const prompt = this.buildPrompt(state);
-    
-    if (!this.apiKey) {
-      console.warn("No VITE_GEMINI_API_KEY found, using MOCK Gemma.");
-      return this.mockDecision(state);
-    }
 
     try {
-      // Specifically calling a Gemma model to satisfy the core Hackathon requirement
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemma-2-9b-it:generateContent?key=${this.apiKey}`, {
+      const res = await fetch('/api/echo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -43,7 +37,7 @@ export class GemmaProvider {
       return null;
     } catch (e) {
       console.error("Gemma API Error", e);
-      return null;
+      return this.mockDecision(state);
     }
   }
 
@@ -59,7 +53,7 @@ ${JSON.stringify({
 
 Output JSON matching this schema:
 {
-  "action": "SPAWN_ENEMY" | "ALTER_ROUTE" | "LOCK_DOOR" | "SPAWN_REWARD" | "CREATE_HAZARD",
+  "action": "SPAWN_ENEMY" | "CHANGE_ENEMY_BEHAVIOR" | "ALTER_ROUTE" | "LOCK_DOOR" | "SPAWN_REWARD" | "CREATE_HAZARD" | "MOVE_RESOURCE",
   "target": "string (door label or room id)",
   "intensity": number (1-3),
   "reason": "string (Write this as a short, arrogant, direct taunt to the player explaining how you are countering them. E.g. 'I see you prefer fighting. Try fighting this.')"
@@ -71,7 +65,7 @@ Respond ONLY with valid JSON.
 
   validateDecision(decision: any): decision is GemmaDecision {
     if (!decision || typeof decision !== 'object') return false;
-    const allowedActions = ['SPAWN_ENEMY', 'ALTER_ROUTE', 'LOCK_DOOR', 'SPAWN_REWARD', 'CREATE_HAZARD'];
+    const allowedActions = ['SPAWN_ENEMY', 'CHANGE_ENEMY_BEHAVIOR', 'ALTER_ROUTE', 'LOCK_DOOR', 'SPAWN_REWARD', 'CREATE_HAZARD', 'MOVE_RESOURCE'];
     if (!allowedActions.includes(decision.action)) return false;
     return true;
   }
@@ -83,9 +77,9 @@ Respond ONLY with valid JSON.
         let target = '';
         let reason = 'I am testing your reflexes. A new enemy has arrived.';
 
-        if (state.behavior.repeatedActions > 2) {
+        if (state.behavior.routeRepetition > 2) {
           action = 'ALTER_ROUTE';
-          target = state.behavior.routePreference;
+          target = state.behavior.preferredRoute;
           reason = 'You rely on the same route too much. I have made it dangerous.';
         } else if (state.behavior.aggression > 0.6) {
           action = 'CREATE_HAZARD';
