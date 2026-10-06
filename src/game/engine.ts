@@ -1,4 +1,4 @@
-import type { GameState, Room, PlayerState, PlayerProfile, Door, Item, Enemy, GemmaDecision } from './types';
+import type { GameState, Room, GemmaDecision } from './types';
 import { gemmaProvider } from './GemmaProvider';
 
 const INITIAL_ROOMS: Record<string, Room> = {
