@@ -159,7 +159,6 @@ function App() {
   // Find exit door to tell player where to go
   const currentRoom = state.world.rooms[state.player.roomId];
   const exitDoor = currentRoom?.doors.find(d => d.label?.includes('EXIT'));
-  const hasKey = state.player.inventory.includes('KEY');
 
   return (
     <div className="app-container" ref={containerRef}>
